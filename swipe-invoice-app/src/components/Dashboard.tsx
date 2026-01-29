@@ -10,9 +10,7 @@ export default function Dashboard() {
   const dispatch = useDispatch();
   const { invoices, products, customers } = useSelector((state: any) => state.data);
 
-  const enrichedInvoices = invoices;
-
-  // Helper to highlight empty/unknown cells
+  // Highlight empty/invalid cells
   const renderValidatedCell = ({ cell }: any) => {
     const val = cell.getValue();
     const isInvalid = !val || val === "Unknown" || val === "null";
@@ -24,6 +22,7 @@ export default function Dashboard() {
     );
   };
 
+  // Invoice columns
   const invoiceColumns = useMemo<MRT_ColumnDef<Invoice>[]>(() => [
     {
       accessorKey: 'isConsistent',
@@ -32,12 +31,8 @@ export default function Dashboard() {
       enableEditing: false,
       Cell: ({ row }) => {
         const inv = row.original;
-        if (inv.missingFields?.length > 0) {
-          return <Badge color="red">Incomplete</Badge>;
-        }
-        if (!inv.isConsistent) {
-          return <Badge color="orange">Mismatch</Badge>;
-        }
+        if (inv.missingFields?.length > 0) return <Badge color="red">Incomplete</Badge>;
+        if (!inv.isConsistent) return <Badge color="orange">Mismatch</Badge>;
         return <Badge color="green">OK</Badge>;
       }
     },
@@ -46,20 +41,20 @@ export default function Dashboard() {
       header: 'Invoice #', 
       size: 100,
       enableEditing: true,
-      Cell: renderValidatedCell // 🔴 Highlights missing Invoice IDs
+      Cell: renderValidatedCell
     },
     { 
       accessorKey: 'date', 
       header: 'Date', 
       size: 100,
       enableEditing: true,
-      Cell: renderValidatedCell // 🔴 Highlights missing Dates
+      Cell: renderValidatedCell
     },
     { 
       accessorKey: 'customerName', 
       header: 'Customer',
       enableEditing: true,
-      Cell: renderValidatedCell // 🔴 Highlights missing Customer Names
+      Cell: renderValidatedCell
     },
     { 
       accessorKey: 'totalAmount', 
@@ -73,12 +68,13 @@ export default function Dashboard() {
     },
   ], []);
 
+  // Product columns
   const productColumns = useMemo<MRT_ColumnDef<Product>[]>(() => [
     { 
       accessorKey: 'name', 
       header: 'Product Name', 
       enableEditing: true,
-      Cell: renderValidatedCell // 🔴 Highlights missing Product Names
+      Cell: renderValidatedCell
     },
     { 
       accessorKey: 'quantity', 
@@ -94,30 +90,33 @@ export default function Dashboard() {
       enableEditing: false,
       Cell: ({ row }) => {
         const p = row.original;
-        const total =(Number(p.unitPrice) || 0) * (Number(p.quantity) || 1) + (Number(p.tax) || 0);
+        const total = (Number(p.unitPrice) || 0) * (Number(p.quantity) || 1) + (Number(p.tax) || 0);
         return `₹${total.toFixed(2)}`;
       }
     },
   ], []);
 
+  // Customer columns
   const customerColumns = useMemo<MRT_ColumnDef<Customer>[]>(() => [
     { 
       accessorKey: 'name', 
       header: 'Name', 
       enableEditing: true,
-      Cell: renderValidatedCell // 🔴 Highlights missing Customer Names
+      Cell: renderValidatedCell
     },
     { 
       accessorKey: 'phone', 
       header: 'Phone', 
       enableEditing: true,
-      Cell: renderValidatedCell // 🔴 Highlights missing Phone Numbers
+      Cell: renderValidatedCell
     },
     { accessorKey: 'totalPurchaseAmount', header: 'Total Spend', enableEditing: false },
   ], []);
 
+  // Invoice detail panel
   const renderDetailPanel = ({ row }: { row: { original: Invoice } }) => {
-    const inv = enrichedInvoices.find((i: Invoice) => i.invoiceId === row.original.invoiceId) || row.original;
+    const inv = invoices.find((i: Invoice) => i.invoiceId === row.original.invoiceId) || row.original;
+    
     return (
       <Paper p="md" withBorder bg="gray.0">
         <Grid>
@@ -177,9 +176,10 @@ export default function Dashboard() {
     );
   };
 
+  // Invoice table setup
   const invoiceTable = useMantineReactTable({
     columns: invoiceColumns,
-    data: enrichedInvoices,
+    data: invoices,
     enableExpanding: true,
     renderDetailPanel: renderDetailPanel,
     enableEditing: true,
@@ -189,31 +189,22 @@ export default function Dashboard() {
     }
   });
 
+  // Product table setup
   const productTable = useMantineReactTable({
-  columns: productColumns,
-  data: products,
+    columns: productColumns,
+    data: products,
+    enableEditing: true,
+    enableRowActions: true,
+    positionActionsColumn: 'last',
+    editDisplayMode: 'row',
+    getRowId: row => row.id,
+    onEditingRowSave: ({ values, row, table }) => {
+      dispatch(updateProduct({ id: row.original.id, updates: values }));
+      table.setEditingRow(null);
+    }
+  });
 
-  enableEditing: true,
-
-  enableRowActions: true,        // ✅ REQUIRED
-  positionActionsColumn: 'last',
-
-  editDisplayMode: 'row',
-
-  getRowId: row => row.id,       // ✅ REQUIRED
-
-  onEditingRowSave: ({ values, row, table }) => {
-
-  dispatch(updateProduct({
-    id: row.original.id,
-    updates: values
-  }));
-
-  table.setEditingRow(null);
-}
-});
-
-
+  // Customer table setup
   const customerTable = useMantineReactTable({
     columns: customerColumns,
     data: customers,

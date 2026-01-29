@@ -6,17 +6,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+# Using gemini-2.0-flash for speed and accuracy
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-# --- PDF FUNCTION (Fixed Tax Extraction) ---
 def normalize_invoice(raw_text: str, entities: list) -> dict:
-    print("\n========== LLM.PY: normalize_invoice() STARTED ==========")
-    print(f"[LLM] Raw text length: {len(raw_text)} characters")
-    print(f"[LLM] Number of entities: {len(entities)}")
-    print(f"[LLM] Entities preview: {json.dumps(entities[:3], indent=2) if entities else 'None'}")
+    """Extract structured invoice data from OCR text using LLM"""
     
+    # Safely format entities for the prompt
+    entities_str = json.dumps(entities, indent=2) if entities else "[]"
+
     prompt = f"""
     You are an expert financial data extractor.
     
@@ -27,35 +25,35 @@ def normalize_invoice(raw_text: str, entities: list) -> dict:
     2. 'unit_price' = Rate/Item column value (price per unit before tax).
     3. 'tax' = GST/Tax column value. Extract ONLY the tax amount number.
        Examples: 
-       - "238.10 (5%)" → tax = 238.10
-       - "18%" with Amount 90169.49 and Taxable 90169.49 → calculate: tax = 0
-       - CGST 9.0% 8115.25 → tax = 8115.25
+       - "238.10 (5%)" -> tax = 238.10
+       - "18%" with Amount 90169.49 and Taxable 90169.49 -> calculate: tax = 0
+       - CGST 9.0% 8115.25 -> tax = 8115.25
     4. 'total' = Amount/Final column (the rightmost price column for each item).
-    5. 'qty' = Quantity column value.
+    5. 'qty' = Quantity column value (default to 1 if missing).
     6. Include "Making charges", "debit card charges", "Shipping Charges" as separate items with qty=1.
     
     CRITICAL TAX RULES:
-    - If tax is shown PER ITEM in the table (like "238.10 (5%)"), extract it for that item
-    - If tax is shown only as INVOICE TOTALS (CGST/SGST/IGST at bottom), set item tax = 0
-    - For Making/Shipping charges with no tax info, set tax = 0
-    - Always capture "tax_total" from the CGST+SGST or IGST total at invoice level
+    - If tax is shown PER ITEM in the table (like "238.10 (5%)"), extract it for that item.
+    - If tax is shown only as INVOICE TOTALS (CGST/SGST/IGST at bottom), set item tax = 0.
+    - For Making/Shipping charges with no tax info, set tax = 0.
+    - Always capture "tax_total" from the CGST+SGST or IGST total at invoice level.
     
-    EXAMPLES:
-    - Invoice shows "CGST 9.0% 8,115.25" and "SGST 9.0% 8,115.25" → tax_total = 16230.50, item tax = 0
-    - Item row shows "238.10 (5%)" in GST column → that item's tax = 238.10
+    INSTRUCTIONS FOR EXTRAS (MISSING IN YOUR PREVIOUS CODE):
+    1. "total_in_words": Look for "Amount in words", "Rupees", "Total (in words)". Extract the full string.
+    2. "bank": Look for "Bank Details", "Account No", "IFSC", "Beneficiary". Extract details.
 
     SCHEMA:
     {{
       "invoice_id": string,
       "date": string,
-      "amount_in_words": string|null,
+      "total_in_words": string|null,
       "customer": {{
         "name": string|null,
         "phone": string|null
       }},
       "bank": {{
-        "name": string|null,
-        "account": string|null,
+        "bank_name": string|null,
+        "account_number": string|null,
         "ifsc": string|null,
         "branch": string|null
       }},
@@ -77,52 +75,37 @@ def normalize_invoice(raw_text: str, entities: list) -> dict:
     {raw_text}
 
     ENTITIES:
-    {json.dumps(entities, indent=2)}
+    {entities_str}
     """
 
-    print("[LLM] Sending prompt to Gemini API...")
-    print(f"[LLM] Prompt length: {len(prompt)} characters")
-    
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
-    )
-    
-    print("[LLM] Received response from Gemini")
+    # Using gemini-2.0-flash (Updated from 2.5 which might not be available yet)
+    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
     text = response.text.strip()
-    print(f"[LLM] Response text length: {len(text)} characters")
-    print(f"[LLM] Raw response preview (first 500 chars):\n{text[:500]}")
     
+    # Extract JSON from response
     match = re.search(r"\{.*\}", text, re.DOTALL)
     clean_text = match.group(0) if match else text
-    print(f"[LLM] JSON extraction {'successful' if match else 'FAILED - using raw text'}")
-    print(f"[LLM] Clean text preview (first 300 chars):\n{clean_text[:300]}")
 
     try:
         result = json.loads(clean_text)
-        print("[LLM] ✅ JSON parsing SUCCESSFUL")
-        print(f"[LLM] Extracted invoice_id: {result.get('invoice_id')}")
-        print(f"[LLM] Extracted date: {result.get('date')}")
-        print(f"[LLM] Extracted customer name: {result.get('customer', {}).get('name')}")
-        print(f"[LLM] Number of items: {len(result.get('items', []))}")
-        print(f"[LLM] Subtotal: {result.get('subtotal')}")
-        print(f"[LLM] Tax total: {result.get('tax_total')}")
-        print(f"[LLM] Grand total: {result.get('total')}")
-        print(f"[LLM] Full result:\n{json.dumps(result, indent=2)}")
-        print("========== LLM.PY: normalize_invoice() COMPLETED ==========\n")
+        # Handle case where LLM wraps result in "invoices" array for single PDF
+        if "invoices" in result and isinstance(result["invoices"], list):
+            return result["invoices"][0]
         return result
     except json.JSONDecodeError as e:
-        print(f"[LLM] ❌ JSON parsing FAILED: {str(e)}")
-        print(f"[LLM] Error at position: {e.pos}")
-        print(f"[LLM] Returning error object")
-        print("========== LLM.PY: normalize_invoice() FAILED ==========\n")
-        return {"error": "Failed to parse PDF JSON", "items": [], "total": 0}
+        print(f"JSON parsing failed: {str(e)}")
+        # Return a safe fallback structure
+        return {
+            "error": "Failed to parse PDF JSON", 
+            "items": [], 
+            "total": 0,
+            "bank": {},
+            "customer": {}
+        }
 
-# --- EXCEL FUNCTION (Enhanced for multiple formats) ---
+
 def extract_bulk_invoices(csv_text: str) -> dict:
-    print("\n========== LLM.PY: extract_bulk_invoices() STARTED ==========")
-    print(f"[LLM-EXCEL] CSV text length: {len(csv_text)} characters")
-    print(f"[LLM-EXCEL] CSV preview (first 500 chars):\n{csv_text[:500]}")
+    """Extract multiple invoices from CSV/Excel data using LLM"""
     
     prompt = f"""
     You are a Data Processor converting CSV/Excel data into JSON.
@@ -179,40 +162,16 @@ def extract_bulk_invoices(csv_text: str) -> dict:
     - Ensure subtotal + tax_total = total
     """
     
-    print("[LLM-EXCEL] Sending prompt to Gemini API...")
-    print(f"[LLM-EXCEL] Prompt length: {len(prompt)} characters")
-    
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
-    )
-
-    print("[LLM-EXCEL] Received response from Gemini")
+    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
     text = response.text.strip()
-    print(f"[LLM-EXCEL] Response text length: {len(text)} characters")
-    print(f"[LLM-EXCEL] Raw response preview (first 500 chars):\n{text[:500]}")
     
+    # Extract JSON from response
     match = re.search(r"\{.*\}", text, re.DOTALL)
     clean_text = match.group(0) if match else text
-    print(f"[LLM-EXCEL] JSON extraction {'successful' if match else 'FAILED - using raw text'}")
 
     try:
         result = json.loads(clean_text)
-        print("[LLM-EXCEL] ✅ JSON parsing SUCCESSFUL")
-        print(f"[LLM-EXCEL] Number of invoices: {len(result.get('invoices', []))}")
-        for i, inv in enumerate(result.get('invoices', [])):
-            print(f"[LLM-EXCEL] Invoice {i+1}:")
-            print(f"  - ID: {inv.get('invoice_id')}")
-            print(f"  - Date: {inv.get('date')}")
-            print(f"  - Customer: {inv.get('customer', {}).get('name')}")
-            print(f"  - Items count: {len(inv.get('items', []))}")
-            print(f"  - Total: {inv.get('total')}")
-        print(f"[LLM-EXCEL] Full result:\n{json.dumps(result, indent=2)}")
-        print("========== LLM.PY: extract_bulk_invoices() COMPLETED ==========\n")
         return result
     except json.JSONDecodeError as e:
-        print(f"[LLM-EXCEL] ❌ JSON parsing FAILED: {str(e)}")
-        print(f"[LLM-EXCEL] Error at position: {e.pos}")
-        print(f"[LLM-EXCEL] Returning empty invoices array")
-        print("========== LLM.PY: extract_bulk_invoices() FAILED ==========\n")
+        print(f"JSON parsing failed: {str(e)}")
         return {"invoices": []}

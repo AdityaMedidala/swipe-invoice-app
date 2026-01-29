@@ -3,7 +3,7 @@ import dataReducer from '../features/data/dataSlice';
 
 export const store = configureStore({
   reducer: {
-    data: dataReducer, // 🔴 THIS MUST EXIST
+    data: dataReducer,
   },
 });
 

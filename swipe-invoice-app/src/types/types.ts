@@ -6,7 +6,7 @@ export interface BankDetails {
 }
 
 export interface InvoiceItem {
-  productId: string; // This is the ID we will use
+  productId: string;
   itemName: string;
   quantity: number;
   unitPrice: number;
@@ -21,17 +21,11 @@ export interface Invoice {
   customerName: string;
   customerPhone: string | null;
   customerId?: string | null;
-
   totalAmount: number;
   taxAmount: number;
-
   totalInWords: string | null;
-
   bankDetails: BankDetails | null;
-
   items: InvoiceItem[];
-
-  // ✅ Validation / Status
   isConsistent: boolean;
   missingFields: string[];
 }
@@ -42,7 +36,7 @@ export interface Product {
   unitPrice: number;
   tax: number;
   priceWithTax: number;
-  quantity?: number; 
+  quantity?: number;
 }
 
 export interface Customer {
