@@ -267,9 +267,7 @@ MIT License - see [LICENSE](LICENSE) file
 
 **Medidala Aditya**
 - Institution: VIT Vellore (B.Tech IT, 2022-26)
-- Email: [your.email@example.com]
-- LinkedIn: [Your LinkedIn]
-- GitHub: [@yourusername](https://github.com/yourusername)
+- Email: djaditya200@gmail.com
 
 ## 🙏 Acknowledgments
 
@@ -278,8 +276,4 @@ MIT License - see [LICENSE](LICENSE) file
 - Google Gemini for LLM extraction
 - Mantine UI for components
 
----
 
-**Assignment Submission for Swipe Software Development Intern (AI) Role**
-
-*Built with ❤️ for Swipe*
