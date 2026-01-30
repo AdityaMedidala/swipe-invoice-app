@@ -6,7 +6,6 @@
 
 An intelligent invoice management system that automates the extraction, processing, and management of invoice data from various file formats using AI. Built for Swipe's internship assignment.
 
-**[Live Demo](YOUR_DEPLOYMENT_LINK)** | **[Documentation](./docs)**
 
 ## ✨ Features
 
