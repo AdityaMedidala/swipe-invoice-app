@@ -4,6 +4,7 @@ import { Dropzone, type FileWithPath } from '@mantine/dropzone';
 import { IconUpload, IconX, IconFileTypePdf } from '@tabler/icons-react';
 import { useDispatch } from 'react-redux';
 import { addInvoice } from '../../features/data/dataSlice';
+const BASE_URL = import.meta.env.VITE_API_URL;
 
 interface FileResult {
   name: string;
@@ -36,7 +37,7 @@ function UploadArea() {
       files.forEach(file => formData.append("files", file));
 
       // Send to backend
-      const response = await fetch("http://127.0.0.1:8000/api/extract-batch", {
+      const response = await fetch(`${BASE_URL}/api/extract-batch`, {
         method: "POST",
         body: formData,
       });
